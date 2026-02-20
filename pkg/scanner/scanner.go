@@ -10,6 +10,11 @@ import (
 	"github.com/simon/cloudbeats-backup-generator/pkg/dropbox"
 )
 
+// IsAudioFile reports whether the filename has a supported audio extension.
+func IsAudioFile(name string) bool {
+	return audioExtensions[strings.ToLower(filepath.Ext(name))]
+}
+
 // Supported audio file extensions.
 var audioExtensions = map[string]bool{
 	".mp3":  true,
@@ -103,10 +108,13 @@ func Match(localDir, remotePath string, localFiles []string, entries []dropbox.E
 		}
 	}
 
-	// Find unmatched Dropbox entries
+	// Find unmatched Dropbox entries (audio files only)
 	for key, entry := range dbLookup {
 		if !matched[key] {
-			result.UnmatchedDropbox = append(result.UnmatchedDropbox, entry)
+			ext := strings.ToLower(filepath.Ext(entry.Name))
+			if audioExtensions[ext] {
+				result.UnmatchedDropbox = append(result.UnmatchedDropbox, entry)
+			}
 		}
 	}
 

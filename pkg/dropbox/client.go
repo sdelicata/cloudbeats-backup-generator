@@ -18,6 +18,7 @@ const (
 	apiBase        = "https://api.dropboxapi.com/2"
 	initialBackoff = 1 * time.Second
 	maxBackoff     = 60 * time.Second
+	maxRetries     = 10
 )
 
 // Client is a Dropbox API client.
@@ -46,7 +47,7 @@ func (c *Client) GetAccountID(ctx context.Context) (string, error) {
 
 	var account Account
 	if err := json.NewDecoder(body).Decode(&account); err != nil {
-		return "", fmt.Errorf("failed to decode account response: %w", err)
+		return "", fmt.Errorf("decoding account response: %w", err)
 	}
 
 	if account.AccountID == "" {
@@ -65,7 +66,10 @@ func (c *Client) ListFolder(ctx context.Context, remotePath string) ([]Entry, er
 		"path":      remotePath,
 		"recursive": true,
 	}
-	reqBody, _ := json.Marshal(payload)
+	reqBody, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling list_folder request: %w", err)
+	}
 
 	body, err := c.apiCall(ctx, "/files/list_folder", string(reqBody))
 	if err != nil {
@@ -75,14 +79,17 @@ func (c *Client) ListFolder(ctx context.Context, remotePath string) ([]Entry, er
 
 	var resp ListFolderResponse
 	if err := json.NewDecoder(body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("failed to decode list_folder response: %w", err)
+		return nil, fmt.Errorf("decoding list_folder response: %w", err)
 	}
 
 	entries := filterFiles(resp.Entries)
 	c.logger.Debug().Int("entries", len(entries)).Bool("has_more", resp.HasMore).Msg("received first page")
 
 	for resp.HasMore {
-		reqBody, _ := json.Marshal(map[string]string{"cursor": resp.Cursor})
+		reqBody, err := json.Marshal(map[string]string{"cursor": resp.Cursor})
+		if err != nil {
+			return nil, fmt.Errorf("marshaling list_folder/continue request: %w", err)
+		}
 
 		body, err := c.apiCall(ctx, "/files/list_folder/continue", string(reqBody))
 		if err != nil {
@@ -92,7 +99,7 @@ func (c *Client) ListFolder(ctx context.Context, remotePath string) ([]Entry, er
 		resp = ListFolderResponse{}
 		if err := json.NewDecoder(body).Decode(&resp); err != nil {
 			body.Close()
-			return nil, fmt.Errorf("failed to decode list_folder/continue response: %w", err)
+			return nil, fmt.Errorf("decoding list_folder/continue response: %w", err)
 		}
 		body.Close()
 
@@ -117,18 +124,19 @@ func filterFiles(entries []Entry) []Entry {
 
 func (c *Client) apiCall(ctx context.Context, endpoint, body string) (io.ReadCloser, error) {
 	backoff := initialBackoff
+	retries := 0
 
 	for {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+endpoint, bytes.NewBufferString(body))
 		if err != nil {
-			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
+			return nil, fmt.Errorf("creating request for %s: %w", endpoint, err)
 		}
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("request to %s failed: %w", endpoint, err)
+			return nil, fmt.Errorf("requesting %s: %w", endpoint, err)
 		}
 
 		switch {
@@ -143,13 +151,17 @@ func (c *Client) apiCall(ctx context.Context, endpoint, body string) (io.ReadClo
 
 		case resp.StatusCode == http.StatusTooManyRequests:
 			resp.Body.Close()
+			retries++
+			if retries > maxRetries {
+				return nil, fmt.Errorf("rate limit retries exhausted for %s after %d attempts", endpoint, maxRetries)
+			}
 			wait := backoff
 			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
 				if secs, err := strconv.Atoi(retryAfter); err == nil {
 					wait = time.Duration(secs) * time.Second
 				}
 			}
-			c.logger.Warn().Dur("wait", wait).Msg("rate limited by Dropbox, waiting")
+			c.logger.Warn().Dur("wait", wait).Int("attempt", retries).Msg("rate limited by Dropbox, waiting")
 
 			select {
 			case <-ctx.Done():

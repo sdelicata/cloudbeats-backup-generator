@@ -102,9 +102,5 @@ func parseSlashNumber(s string, fallback int) int {
 
 func filenameWithoutExt(path string) string {
 	name := filepath.Base(path)
-	ext := filepath.Ext(name)
-	if ext != "" {
-		return name[:len(name)-len(ext)]
-	}
-	return name
+	return strings.TrimSuffix(name, filepath.Ext(name))
 }

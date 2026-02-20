@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 
 	"github.com/rs/zerolog"
@@ -40,42 +41,49 @@ func main() {
 	}
 
 	// Resolve token: flag > env var
-	tkn := *token
-	if tkn == "" {
-		tkn = os.Getenv("DROPBOX_TOKEN")
+	tok := *token
+	if tok == "" {
+		tok = os.Getenv("DROPBOX_TOKEN")
 	}
-	if tkn == "" {
+	if tok == "" {
 		logger.Fatal().Msg("Dropbox token is required. Use --token or set DROPBOX_TOKEN env var")
+	}
+
+	// Validate workers
+	if *workers < 1 {
+		logger.Warn().Int("value", *workers).Msg("--workers must be at least 1, clamping to 1")
+		*workers = 1
 	}
 
 	// Resolve local dir to absolute path
 	absLocal, err := filepath.Abs(*localDir)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to resolve local path")
+		logger.Fatal().Err(err).Msg("resolving local path")
 	}
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
 	// Step 1: Authenticate with Dropbox
-	client := dropbox.NewClient(tkn, logger)
+	client := dropbox.NewClient(tok, logger)
 	logger.Info().Msg("authenticating with Dropbox...")
 	accountID, err := client.GetAccountID(ctx)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to authenticate with Dropbox")
+		logger.Fatal().Err(err).Msg("authenticating with Dropbox")
 	}
 	logger.Info().Str("account_id", accountID).Msg("authenticated")
 
 	// Step 2a: Detect Dropbox root path
 	dropboxRoot, err := dropbox.DetectRootPath()
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to detect Dropbox root path")
+		logger.Fatal().Err(err).Msg("detecting Dropbox root path")
 	}
 	logger.Info().Str("dropbox_root", dropboxRoot).Msg("detected Dropbox root")
 
 	// Step 2b: Compute remote path
 	remotePath, err := dropbox.ComputeRemotePath(absLocal, dropboxRoot)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to compute remote path")
+		logger.Fatal().Err(err).Msg("computing remote path")
 	}
 	logger.Info().Str("remote_path", remotePath).Msg("computed remote path")
 
@@ -83,7 +91,7 @@ func main() {
 	logger.Info().Str("dir", absLocal).Msg("scanning local files...")
 	localFiles, err := scanner.ScanLocal(absLocal)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to scan local directory")
+		logger.Fatal().Err(err).Msg("scanning local directory")
 	}
 	logger.Info().Int("count", len(localFiles)).Msg("local audio files found")
 
@@ -91,7 +99,7 @@ func main() {
 	logger.Info().Msg("listing Dropbox files...")
 	entries, err := client.ListFolder(ctx, remotePath)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to list Dropbox folder")
+		logger.Fatal().Err(err).Msg("listing Dropbox folder")
 	}
 
 	// Step 2e: Match local files with Dropbox entries
@@ -102,12 +110,12 @@ func main() {
 		Int("unmatched_dropbox", len(result.UnmatchedDropbox)).
 		Msg("matching complete")
 
-	// Warn about unmatched files
+	// Log unmatched files
 	for _, path := range result.UnmatchedLocal {
-		logger.Warn().Str("file", path).Msg("local file has no Dropbox match (skipped)")
+		logger.Debug().Str("file", path).Msg("local file has no Dropbox match (skipped)")
 	}
 	for _, entry := range result.UnmatchedDropbox {
-		logger.Warn().Str("path", entry.PathDisplay).Msg("Dropbox file has no local match")
+		logger.Debug().Str("path", entry.PathDisplay).Msg("Dropbox file has no local match")
 	}
 
 	// Dry-run: print summary and exit
@@ -177,7 +185,7 @@ func main() {
 
 	// Step 5: Write backup file
 	if err := backup.Write(*output, b); err != nil {
-		logger.Fatal().Err(err).Msg("failed to write backup file")
+		logger.Fatal().Err(err).Msg("writing backup file")
 	}
 	logger.Info().Str("output", *output).Int("items", len(items)).Msg("backup file written")
 }

@@ -1,4 +1,4 @@
-.PHONY: build run lint clean
+.PHONY: build run lint test clean
 
 build:
 	go build -o cloudbeats-backup-generator ./cmd
@@ -8,6 +8,9 @@ run: build
 
 lint:
 	go vet ./...
+
+test:
+	go test ./...
 
 clean:
 	rm -f cloudbeats-backup-generator

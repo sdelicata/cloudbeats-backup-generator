@@ -10,10 +10,10 @@ import (
 func Write(path string, b *Backup) error {
 	data, err := json.Marshal(b)
 	if err != nil {
-		return fmt.Errorf("failed to marshal backup: %w", err)
+		return fmt.Errorf("marshaling backup: %w", err)
 	}
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write backup file: %w", err)
+		return fmt.Errorf("writing backup file: %w", err)
 	}
 	return nil
 }

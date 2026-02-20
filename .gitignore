@@ -1,3 +1,4 @@
 cloudbeats-backup-generator
 *.cbbackup
 .idea/
+.DS_Store

@@ -23,7 +23,7 @@ type infoAccount struct {
 func DetectRootPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
+		return "", fmt.Errorf("determining home directory: %w", err)
 	}
 
 	candidates := []string{
@@ -51,7 +51,7 @@ func readInfoJSON(path string) (string, error) {
 
 	var info infoJSON
 	if err := json.Unmarshal(data, &info); err != nil {
-		return "", fmt.Errorf("failed to parse %s: %w", path, err)
+		return "", fmt.Errorf("parsing %s: %w", path, err)
 	}
 
 	if info.Personal != nil && info.Personal.Path != "" {
@@ -70,12 +70,12 @@ func readInfoJSON(path string) (string, error) {
 func ComputeRemotePath(localAbs, dropboxRoot string) (string, error) {
 	resolvedLocal, err := filepath.EvalSymlinks(localAbs)
 	if err != nil {
-		return "", fmt.Errorf("cannot resolve local path %s: %w", localAbs, err)
+		return "", fmt.Errorf("resolving local path %s: %w", localAbs, err)
 	}
 
 	resolvedRoot, err := filepath.EvalSymlinks(dropboxRoot)
 	if err != nil {
-		return "", fmt.Errorf("cannot resolve Dropbox root %s: %w", dropboxRoot, err)
+		return "", fmt.Errorf("resolving Dropbox root %s: %w", dropboxRoot, err)
 	}
 
 	// Normalize both to clean paths
