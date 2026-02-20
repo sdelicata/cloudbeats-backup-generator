@@ -1,0 +1,16 @@
+module github.com/simon/cloudbeats-backup-generator
+
+go 1.24
+
+require (
+	github.com/rs/zerolog v1.33.0
+	go.senan.xyz/taglib v0.6.0
+	golang.org/x/text v0.21.0
+)
+
+require (
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/tetratelabs/wazero v1.8.2 // indirect
+	golang.org/x/sys v0.12.0 // indirect
+)
