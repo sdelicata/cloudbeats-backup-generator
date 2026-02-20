@@ -21,7 +21,7 @@ func main() {
 	localDir := flag.String("local", "", "Path to the local folder to scan (required, must be inside the Dropbox folder)")
 	output := flag.String("output", "cloudbeats.cbbackup", "Path to the output .cbbackup file")
 	token := flag.String("token", "", "Dropbox access token (also read from DROPBOX_TOKEN env var)")
-	workers := flag.Int("workers", 10, "Number of parallel workers for reading tags")
+	workers := flag.Int("workers", 500, "Number of parallel workers for reading tags")
 	dryRun := flag.Bool("dry-run", false, "Show Dropbox mapping without reading tags or writing a file")
 	logLevel := flag.String("log-level", "info", "Log level: trace, debug, info, warn, error")
 	flag.Parse()
