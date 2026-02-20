@@ -64,7 +64,7 @@ cloudbeats-backup-generator [flags]
 | `--local` | *(required)* | Path to the local folder to scan (must be inside the Dropbox folder) |
 | `--output` | `cloudbeats.cbbackup` | Path to the output `.cbbackup` file |
 | `--token` | | Dropbox access token (also read from `DROPBOX_TOKEN` env var) |
-| `--workers` | `500` | Number of parallel workers for reading audio tags |
+| `--workers` | `200` | Number of parallel workers for reading audio tags |
 | `--dry-run` | `false` | Show Dropbox mapping without reading tags or writing a file |
 | `--log-level` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error` |
 
