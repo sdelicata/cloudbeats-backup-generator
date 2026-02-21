@@ -44,7 +44,7 @@ The tool needs a short-lived Dropbox access token to call the API. Here's how to
 
 ```sh
 # Clone and build
-git clone https://github.com/simon/cloudbeats-backup-generator.git
+git clone https://github.com/sdelicata/cloudbeats-backup-generator.git
 cd cloudbeats-backup-generator
 make build
 ```

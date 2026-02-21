@@ -11,7 +11,7 @@ lint:
 
 fmt:
 	gofumpt -w .
-	gci write --section standard --section default --section "prefix(github.com/simon/cloudbeats-backup-generator)" .
+	gci write --section standard --section default --section "prefix(github.com/sdelicata/cloudbeats-backup-generator)" .
 
 test:
 	go test -race ./...

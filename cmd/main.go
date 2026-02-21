@@ -12,11 +12,11 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/simon/cloudbeats-backup-generator/pkg/backup"
-	"github.com/simon/cloudbeats-backup-generator/pkg/dropbox"
-	"github.com/simon/cloudbeats-backup-generator/pkg/matcher"
-	"github.com/simon/cloudbeats-backup-generator/pkg/tags"
-	"github.com/simon/cloudbeats-backup-generator/pkg/worker"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/backup"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/dropbox"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/matcher"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/tags"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/worker"
 )
 
 func main() {

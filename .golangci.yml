@@ -35,4 +35,4 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/simon/cloudbeats-backup-generator)
+        - prefix(github.com/sdelicata/cloudbeats-backup-generator)

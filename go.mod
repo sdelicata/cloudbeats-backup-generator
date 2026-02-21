@@ -1,4 +1,4 @@
-module github.com/simon/cloudbeats-backup-generator
+module github.com/sdelicata/cloudbeats-backup-generator
 
 go 1.24
 

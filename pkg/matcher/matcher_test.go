@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/simon/cloudbeats-backup-generator/pkg/dropbox"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/dropbox"
 )
 
 func TestMatch_CaseInsensitive(t *testing.T) {
