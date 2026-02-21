@@ -18,25 +18,75 @@ It reads audio metadata (artist, album, duration, etc.) directly from local file
   brew install taglib   # macOS
   ```
 - **Dropbox Desktop** installed and syncing the music folder locally
-- **A Dropbox access token** (see below)
+- **Dropbox API credentials** (see below)
 
-## Dropbox Token Setup
+## Dropbox Authentication
 
-The tool needs a short-lived Dropbox access token to call the API. Here's how to get one:
+The tool supports two authentication methods:
+
+### Method 1: Refresh Token (Recommended)
+
+Uses long-lived credentials to automatically obtain a fresh access token at each run. No manual token regeneration needed.
+
+**App setup** (one-time):
 
 1. Go to <https://www.dropbox.com/developers/apps>
 2. Click **Create app**
-3. Choose:
-   - **Scoped access**
-   - **Full Dropbox** access
+3. Choose **Scoped access** and **Full Dropbox** access
 4. Name your app (e.g. `cloudbeats-backup`) and click **Create app**
 5. Go to the **Permissions** tab and enable:
    - `files.metadata.read`
    - `account_info.read`
 6. Click **Submit** to save the permissions
-7. Go back to the **Settings** tab
-8. Under **OAuth 2 > Generated access token**, click **Generate**
-9. Copy the token
+7. Note your **App key** and **App secret** from the **Settings** tab
+
+**Generate a refresh token** (one-time):
+
+1. Open this URL in your browser (replace `YOUR_APP_KEY`):
+   ```
+   https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&response_type=code&token_access_type=offline
+   ```
+2. Authorize the app and copy the **authorization code**
+3. Exchange the code for a refresh token:
+   ```sh
+   curl -X POST https://api.dropboxapi.com/oauth2/token \
+     -d code=AUTHORIZATION_CODE \
+     -d grant_type=authorization_code \
+     -d client_id=YOUR_APP_KEY \
+     -d client_secret=YOUR_APP_SECRET
+   ```
+4. Save the `refresh_token` from the JSON response — it does not expire
+
+**Usage:**
+
+```sh
+./cloudbeats-backup-generator --local ~/Dropbox/Music \
+  --app-key YOUR_APP_KEY \
+  --app-secret YOUR_APP_SECRET \
+  --refresh-token YOUR_REFRESH_TOKEN
+```
+
+Or with environment variables:
+
+```sh
+export DROPBOX_APP_KEY="YOUR_APP_KEY"
+export DROPBOX_APP_SECRET="YOUR_APP_SECRET"
+export DROPBOX_REFRESH_TOKEN="YOUR_REFRESH_TOKEN"
+./cloudbeats-backup-generator --local ~/Dropbox/Music
+```
+
+### Method 2: Short-Lived Token
+
+Uses a manually generated access token that expires after ~4 hours.
+
+1. Follow the **App setup** steps above
+2. Go to the **Settings** tab
+3. Under **OAuth 2 > Generated access token**, click **Generate**
+4. Copy the token
+
+```sh
+./cloudbeats-backup-generator --local ~/Dropbox/Music --token "sl.xxxxx"
+```
 
 > **Note:** Developer console tokens expire after ~4 hours. You'll need to generate a new one each time you run the tool.
 
@@ -67,21 +117,30 @@ cloudbeats-backup-generator [flags]
 |------|---------|-------------|
 | `--local` | *(required)* | Path to the local folder to scan (must be inside the Dropbox folder) |
 | `--output` | `cloudbeats.cbbackup` | Path to the output `.cbbackup` file |
-| `--token` | | Dropbox access token (also read from `DROPBOX_TOKEN` env var) |
+| `--app-key` | | Dropbox app key (also read from `DROPBOX_APP_KEY` env var) |
+| `--app-secret` | | Dropbox app secret (also read from `DROPBOX_APP_SECRET` env var) |
+| `--refresh-token` | | Dropbox refresh token (also read from `DROPBOX_REFRESH_TOKEN` env var) |
+| `--token` | | Dropbox short-lived access token (also read from `DROPBOX_TOKEN` env var) |
 | `--workers` | `0` (auto: 2x CPU cores) | Number of parallel workers for reading audio tags |
 | `--dry-run` | `false` | Show Dropbox mapping without reading tags or writing a file |
 | `--log-level` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error` |
 
-The token is resolved in order: `--token` flag > `DROPBOX_TOKEN` environment variable.
+**Token resolution priority:** If `--app-key`, `--app-secret`, and `--refresh-token` are all provided, a fresh access token is obtained automatically. Otherwise, `--token` / `DROPBOX_TOKEN` is used directly. Each flag falls back to its corresponding environment variable.
 
 ### Examples
 
 ```sh
-# Basic usage
+# Using refresh token (recommended)
+./cloudbeats-backup-generator --local ~/Dropbox/Music \
+  --app-key "abc123" --app-secret "xyz789" --refresh-token "def456"
+
+# Using a short-lived access token
 ./cloudbeats-backup-generator --local ~/Dropbox/Music --token "sl.xxxxx"
 
-# Using an environment variable for the token
-export DROPBOX_TOKEN="sl.xxxxx"
+# Using environment variables
+export DROPBOX_APP_KEY="abc123"
+export DROPBOX_APP_SECRET="xyz789"
+export DROPBOX_REFRESH_TOKEN="def456"
 ./cloudbeats-backup-generator --local ~/Dropbox/Music
 
 # Custom output path
@@ -96,7 +155,7 @@ export DROPBOX_TOKEN="sl.xxxxx"
 
 ## How It Works
 
-1. **Authenticate** — Connects to Dropbox with the provided token and retrieves your account ID
+1. **Authenticate** — Obtains a fresh access token (via refresh token) or uses the provided token, then retrieves your account ID
 2. **Scan & match** — Detects the Dropbox root path from `~/.dropbox/info.json`, scans the local folder for audio files, lists the corresponding Dropbox folder via the API, and matches local files to their Dropbox entries (case-insensitive, NFC-normalized)
 3. **Read tags** — Reads ID3/audio metadata (title, artist, album, duration, etc.) from each local file using a parallel worker pool
 4. **Build backup** — Assembles each matched file into a `.cbbackup` item with its Dropbox file ID and audio metadata

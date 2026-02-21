@@ -23,6 +23,9 @@ func main() {
 	localDir := flag.String("local", "", "Path to the local folder to scan (required, must be inside the Dropbox folder)")
 	output := flag.String("output", "cloudbeats.cbbackup", "Path to the output .cbbackup file")
 	token := flag.String("token", "", "Dropbox access token (also read from DROPBOX_TOKEN env var)")
+	appKey := flag.String("app-key", "", "Dropbox app key for refresh token auth (also read from DROPBOX_APP_KEY env var)")
+	appSecret := flag.String("app-secret", "", "Dropbox app secret for refresh token auth (also read from DROPBOX_APP_SECRET env var)")
+	refreshToken := flag.String("refresh-token", "", "Dropbox refresh token for automatic token renewal (also read from DROPBOX_REFRESH_TOKEN env var)")
 	workers := flag.Int("workers", 0, "Number of parallel workers for reading tags (0 = auto: 2x CPU cores)")
 	dryRun := flag.Bool("dry-run", false, "Show Dropbox mapping without reading tags or writing a file")
 	logLevel := flag.String("log-level", "info", "Log level: trace, debug, info, warn, error")
@@ -42,13 +45,19 @@ func main() {
 		logger.Fatal().Msg("--local flag is required")
 	}
 
-	// Resolve token: flag > env var
-	tok := *token
-	if tok == "" {
-		tok = os.Getenv("DROPBOX_TOKEN")
-	}
-	if tok == "" {
-		logger.Fatal().Msg("Dropbox token is required. Use --token or set DROPBOX_TOKEN env var")
+	// Resolve Dropbox access token
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	tok, err := resolveToken(ctx,
+		firstNonEmpty(*appKey, os.Getenv("DROPBOX_APP_KEY")),
+		firstNonEmpty(*appSecret, os.Getenv("DROPBOX_APP_SECRET")),
+		firstNonEmpty(*refreshToken, os.Getenv("DROPBOX_REFRESH_TOKEN")),
+		firstNonEmpty(*token, os.Getenv("DROPBOX_TOKEN")),
+		logger,
+	)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("resolving Dropbox token")
 	}
 
 	// Auto-detect or validate workers
@@ -61,9 +70,6 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("resolving local path")
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
 
 	// Step 1: Authenticate with Dropbox
 	client := dropbox.NewClient(tok, logger)
@@ -189,4 +195,35 @@ func main() {
 		logger.Fatal().Err(err).Msg("writing backup file")
 	}
 	logger.Info().Str("output", *output).Int("items", len(items)).Msg("backup file written")
+}
+
+func resolveToken(ctx context.Context, appKey, appSecret, refreshToken, directToken string, logger zerolog.Logger) (string, error) {
+	// Refresh mode: all 3 refresh params present
+	if appKey != "" && appSecret != "" && refreshToken != "" {
+		logger.Info().Msg("refreshing Dropbox access token...")
+		token, err := dropbox.RefreshAccessToken(ctx, appKey, appSecret, refreshToken)
+		if err != nil {
+			return "", fmt.Errorf("refreshing access token: %w", err)
+		}
+		logger.Info().Msg("access token refreshed successfully")
+		return token, nil
+	}
+
+	// Direct mode: token provided directly
+	if directToken != "" {
+		return directToken, nil
+	}
+
+	return "", fmt.Errorf("dropbox authentication required. Either provide:\n" +
+		"  - --app-key, --app-secret, and --refresh-token (recommended, automatic renewal)\n" +
+		"  - --token or DROPBOX_TOKEN env var (short-lived, expires in ~4h)")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

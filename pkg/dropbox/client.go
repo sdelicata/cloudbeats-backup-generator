@@ -148,7 +148,8 @@ func (c *Client) apiCall(ctx context.Context, endpoint, body string) (io.ReadClo
 			_ = resp.Body.Close()
 			return nil, fmt.Errorf("dropbox authentication failed (401). " +
 				"Your token may be invalid or expired. " +
-				"Generate a new token at https://www.dropbox.com/developers/apps")
+				"Use --app-key/--app-secret/--refresh-token for automatic renewal, " +
+				"or generate a new token at https://www.dropbox.com/developers/apps")
 
 		case http.StatusTooManyRequests:
 			_ = resp.Body.Close()
