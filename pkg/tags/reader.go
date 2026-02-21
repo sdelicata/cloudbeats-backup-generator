@@ -1,6 +1,8 @@
+// Package tags reads audio metadata from local files using taglib.
 package tags
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,7 +26,7 @@ type AudioMeta struct {
 
 // ReadFile extracts audio metadata from the file at path.
 // On failure, returns defaults ("Unknown" for artist/album, filename for title, 0 for duration).
-func ReadFile(path string) (meta AudioMeta) {
+func ReadFile(path string) (meta AudioMeta, err error) {
 	meta = AudioMeta{
 		Title:       filenameWithoutExt(path),
 		Artist:      "Unknown",
@@ -36,7 +38,7 @@ func ReadFile(path string) (meta AudioMeta) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			// taglib panicked — return defaults
+			err = fmt.Errorf("taglib panicked: %v", r)
 		}
 	}()
 
@@ -44,7 +46,7 @@ func ReadFile(path string) (meta AudioMeta) {
 	props, propsErr := taglib.ReadProperties(path)
 
 	if tagsErr != nil {
-		return meta
+		return meta, nil
 	}
 
 	if v := firstTag(tags, "TITLE"); v != "" {
@@ -76,7 +78,7 @@ func ReadFile(path string) (meta AudioMeta) {
 		meta.Duration = props.Length
 	}
 
-	return meta
+	return meta, nil
 }
 
 func firstTag(tags map[string][]string, key string) string {

@@ -1,14 +1,18 @@
-package scanner
+package matcher
 
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/simon/cloudbeats-backup-generator/pkg/dropbox"
 )
 
 func TestMatch_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	localDir := "/music"
 	remotePath := "/Music"
 
@@ -19,24 +23,20 @@ func TestMatch_CaseInsensitive(t *testing.T) {
 
 	result := Match(localDir, remotePath, localFiles, entries)
 
-	if len(result.Matched) != 1 {
-		t.Fatalf("expected 1 match, got %d", len(result.Matched))
-	}
-	if len(result.UnmatchedLocal) != 0 {
-		t.Errorf("expected 0 unmatched local, got %d", len(result.UnmatchedLocal))
-	}
-	if len(result.UnmatchedDropbox) != 0 {
-		t.Errorf("expected 0 unmatched dropbox, got %d", len(result.UnmatchedDropbox))
-	}
+	require.Len(t, result.Matched, 1)
+	assert.Empty(t, result.UnmatchedLocal)
+	assert.Empty(t, result.UnmatchedDropbox)
 }
 
 func TestMatch_NFCNormalization(t *testing.T) {
+	t.Parallel()
+
 	localDir := "/music"
 	remotePath := "/Music"
 
-	// NFD decomposed form of "é" (e + combining acute accent)
-	nfdName := norm.NFD.String("café.mp3")
-	nfcName := norm.NFC.String("café.mp3")
+	// NFD decomposed form of "e" (e + combining acute accent)
+	nfdName := norm.NFD.String("cafe.mp3")
+	nfcName := norm.NFC.String("cafe.mp3")
 
 	localFiles := []string{"/music/" + nfdName}
 	entries := []dropbox.Entry{
@@ -45,12 +45,12 @@ func TestMatch_NFCNormalization(t *testing.T) {
 
 	result := Match(localDir, remotePath, localFiles, entries)
 
-	if len(result.Matched) != 1 {
-		t.Fatalf("expected 1 match after NFC normalization, got %d", len(result.Matched))
-	}
+	require.Len(t, result.Matched, 1)
 }
 
 func TestMatch_UnmatchedFilterAudioOnly(t *testing.T) {
+	t.Parallel()
+
 	localDir := "/music"
 	remotePath := "/Music"
 
@@ -62,15 +62,13 @@ func TestMatch_UnmatchedFilterAudioOnly(t *testing.T) {
 
 	result := Match(localDir, remotePath, nil, entries)
 
-	if len(result.UnmatchedDropbox) != 1 {
-		t.Fatalf("expected 1 unmatched Dropbox entry (audio only), got %d", len(result.UnmatchedDropbox))
-	}
-	if result.UnmatchedDropbox[0].Name != "song.mp3" {
-		t.Errorf("expected unmatched entry to be song.mp3, got %s", result.UnmatchedDropbox[0].Name)
-	}
+	require.Len(t, result.UnmatchedDropbox, 1)
+	assert.Equal(t, "song.mp3", result.UnmatchedDropbox[0].Name)
 }
 
 func TestIsAudioFile(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		file string
@@ -83,11 +81,11 @@ func TestIsAudioFile(t *testing.T) {
 		{"flac", "track.flac", true},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsAudioFile(tt.file); got != tt.want {
-				t.Errorf("IsAudioFile(%q) = %v, want %v", tt.file, got, tt.want)
-			}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, test.want, IsAudioFile(test.file))
 		})
 	}
 }

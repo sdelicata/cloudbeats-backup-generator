@@ -1,3 +1,4 @@
+// Package worker provides a concurrent worker pool for parallel task execution.
 package worker
 
 import (

@@ -1,3 +1,4 @@
+// Package backup handles the generation of CloudBeats backup JSON files.
 package backup
 
 import (
@@ -35,6 +36,7 @@ type Item struct {
 // Duration is a float64 that always serializes with one decimal place (e.g. 294.0).
 type Duration float64
 
+// MarshalJSON formats the duration with one decimal place.
 func (d Duration) MarshalJSON() ([]byte, error) {
 	s := strconv.FormatFloat(float64(d), 'f', 1, 64)
 	return []byte(s), nil

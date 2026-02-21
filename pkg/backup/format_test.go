@@ -2,9 +2,14 @@ package backup
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDuration_MarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		d    Duration
@@ -15,15 +20,13 @@ func TestDuration_MarshalJSON(t *testing.T) {
 		{"zero", Duration(0), "0.0"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.d.MarshalJSON()
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if string(got) != tt.want {
-				t.Errorf("MarshalJSON() = %s, want %s", got, tt.want)
-			}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := test.d.MarshalJSON()
+			require.NoError(t, err)
+			assert.Equal(t, test.want, string(got))
 		})
 	}
 }

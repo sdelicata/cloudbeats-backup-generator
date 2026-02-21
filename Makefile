@@ -1,4 +1,4 @@
-.PHONY: build run lint test clean
+.PHONY: build run lint test fmt clean
 
 build:
 	go build -o cloudbeats-backup-generator ./cmd
@@ -7,10 +7,14 @@ run: build
 	./cloudbeats-backup-generator $(ARGS)
 
 lint:
-	go vet ./...
+	golangci-lint run
+
+fmt:
+	gofumpt -w .
+	gci write --section standard --section default --section "prefix(github.com/simon/cloudbeats-backup-generator)" .
 
 test:
-	go test ./...
+	go test -race ./...
 
 clean:
 	rm -f cloudbeats-backup-generator

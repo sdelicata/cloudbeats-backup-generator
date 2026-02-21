@@ -2,9 +2,13 @@ package tags
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseYear(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		s    string
@@ -17,16 +21,18 @@ func TestParseYear(t *testing.T) {
 		{"non-numeric prefix", "abcd", 0},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseYear(tt.s); got != tt.want {
-				t.Errorf("parseYear(%q) = %d, want %d", tt.s, got, tt.want)
-			}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, test.want, parseYear(test.s))
 		})
 	}
 }
 
 func TestParseSlashNumber(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		s        string
@@ -40,16 +46,18 @@ func TestParseSlashNumber(t *testing.T) {
 		{"empty string", "", 1, 1},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseSlashNumber(tt.s, tt.fallback); got != tt.want {
-				t.Errorf("parseSlashNumber(%q, %d) = %d, want %d", tt.s, tt.fallback, got, tt.want)
-			}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, test.want, parseSlashNumber(test.s, test.fallback))
 		})
 	}
 }
 
 func TestFilenameWithoutExt(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		path string
@@ -61,11 +69,11 @@ func TestFilenameWithoutExt(t *testing.T) {
 		{"just filename", "track.ogg", "track"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := filenameWithoutExt(tt.path); got != tt.want {
-				t.Errorf("filenameWithoutExt(%q) = %q, want %q", tt.path, got, tt.want)
-			}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, test.want, filenameWithoutExt(test.path))
 		})
 	}
 }

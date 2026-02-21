@@ -1,3 +1,4 @@
+// Package dropbox provides a client for the Dropbox API and local Dropbox detection.
 package dropbox
 
 import (
@@ -43,7 +44,7 @@ func (c *Client) GetAccountID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	var account Account
 	if err := json.NewDecoder(body).Decode(&account); err != nil {
@@ -75,7 +76,7 @@ func (c *Client) ListFolder(ctx context.Context, remotePath string) ([]Entry, er
 	if err != nil {
 		return nil, err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	var resp ListFolderResponse
 	if err := json.NewDecoder(body).Decode(&resp); err != nil {
@@ -98,10 +99,10 @@ func (c *Client) ListFolder(ctx context.Context, remotePath string) ([]Entry, er
 
 		resp = ListFolderResponse{}
 		if err := json.NewDecoder(body).Decode(&resp); err != nil {
-			body.Close()
+			_ = body.Close()
 			return nil, fmt.Errorf("decoding list_folder/continue response: %w", err)
 		}
-		body.Close()
+		_ = body.Close()
 
 		page := filterFiles(resp.Entries)
 		entries = append(entries, page...)
@@ -139,18 +140,18 @@ func (c *Client) apiCall(ctx context.Context, endpoint, body string) (io.ReadClo
 			return nil, fmt.Errorf("requesting %s: %w", endpoint, err)
 		}
 
-		switch {
-		case resp.StatusCode == http.StatusOK:
+		switch resp.StatusCode {
+		case http.StatusOK:
 			return resp.Body, nil
 
-		case resp.StatusCode == http.StatusUnauthorized:
-			resp.Body.Close()
-			return nil, fmt.Errorf("Dropbox authentication failed (401). " +
+		case http.StatusUnauthorized:
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("dropbox authentication failed (401). " +
 				"Your token may be invalid or expired. " +
 				"Generate a new token at https://www.dropbox.com/developers/apps")
 
-		case resp.StatusCode == http.StatusTooManyRequests:
-			resp.Body.Close()
+		case http.StatusTooManyRequests:
+			_ = resp.Body.Close()
 			retries++
 			if retries > maxRetries {
 				return nil, fmt.Errorf("rate limit retries exhausted for %s after %d attempts", endpoint, maxRetries)
@@ -173,8 +174,8 @@ func (c *Client) apiCall(ctx context.Context, endpoint, body string) (io.ReadClo
 
 		default:
 			respBody, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			return nil, fmt.Errorf("Dropbox API error %d on %s: %s", resp.StatusCode, endpoint, string(respBody))
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("dropbox API error %d on %s: %s", resp.StatusCode, endpoint, string(respBody))
 		}
 	}
 }

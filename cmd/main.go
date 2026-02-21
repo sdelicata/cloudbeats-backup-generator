@@ -1,3 +1,4 @@
+// Package main is the entry point for the cloudbeats-backup-generator CLI.
 package main
 
 import (
@@ -12,7 +13,7 @@ import (
 
 	"github.com/simon/cloudbeats-backup-generator/pkg/backup"
 	"github.com/simon/cloudbeats-backup-generator/pkg/dropbox"
-	"github.com/simon/cloudbeats-backup-generator/pkg/scanner"
+	"github.com/simon/cloudbeats-backup-generator/pkg/matcher"
 	"github.com/simon/cloudbeats-backup-generator/pkg/tags"
 	"github.com/simon/cloudbeats-backup-generator/pkg/worker"
 )
@@ -89,7 +90,7 @@ func main() {
 
 	// Step 2c: Scan local files
 	logger.Info().Str("dir", absLocal).Msg("scanning local files...")
-	localFiles, err := scanner.ScanLocal(absLocal)
+	localFiles, err := matcher.ScanLocal(absLocal)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("scanning local directory")
 	}
@@ -103,7 +104,7 @@ func main() {
 	}
 
 	// Step 2e: Match local files with Dropbox entries
-	result := scanner.Match(absLocal, remotePath, localFiles, entries)
+	result := matcher.Match(absLocal, remotePath, localFiles, entries)
 	logger.Info().
 		Int("matched", len(result.Matched)).
 		Int("unmatched_local", len(result.UnmatchedLocal)).
@@ -135,8 +136,8 @@ func main() {
 	total := len(result.Matched)
 
 	metas, errs := worker.Process(ctx, result.Matched, *workers,
-		func(_ context.Context, mf scanner.MatchedFile) (tags.AudioMeta, error) {
-			return tags.ReadFile(mf.LocalPath), nil
+		func(_ context.Context, mf matcher.MatchedFile) (tags.AudioMeta, error) {
+			return tags.ReadFile(mf.LocalPath)
 		},
 		func(done, total int) {
 			fmt.Fprintf(os.Stderr, "\rProcessing: %d/%d files", done, total)
@@ -144,7 +145,7 @@ func main() {
 	)
 	fmt.Fprintf(os.Stderr, "\rProcessing: %d/%d files\n", total, total)
 
-	// Log any tag reading errors (shouldn't happen since ReadFile returns defaults)
+	// Log any tag reading errors (e.g. taglib panics)
 	for i, err := range errs {
 		if err != nil {
 			logger.Warn().Err(err).Str("file", result.Matched[i].LocalPath).Msg("error reading tags")

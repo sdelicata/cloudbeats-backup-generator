@@ -12,7 +12,7 @@ func Write(path string, b *Backup) error {
 	if err != nil {
 		return fmt.Errorf("marshaling backup: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("writing backup file: %w", err)
 	}
 	return nil

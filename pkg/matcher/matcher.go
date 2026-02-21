@@ -1,4 +1,5 @@
-package scanner
+// Package matcher matches local audio files against Dropbox entries.
+package matcher
 
 import (
 	"os"

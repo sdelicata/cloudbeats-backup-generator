@@ -38,7 +38,7 @@ func DetectRootPath() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Dropbox Desktop does not appear to be installed. " +
+	return "", fmt.Errorf("dropbox desktop does not appear to be installed. " +
 		"Verify that Dropbox Desktop is installed and that info.json exists " +
 		"(checked ~/.dropbox/info.json and ~/Library/Application Support/Dropbox/info.json)")
 }

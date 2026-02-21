@@ -1,0 +1,38 @@
+version: "2"
+
+linters:
+  enable:
+    - revive
+    - govet
+    - staticcheck
+    - misspell
+    - errcheck
+    - unconvert
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: error-strings
+        - name: var-naming
+        - name: blank-imports
+        - name: unexported-return
+        - name: package-comments
+        - name: exported
+    misspell:
+      locale: US
+    staticcheck:
+      checks:
+        - "all"
+        - "-QF*"
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/simon/cloudbeats-backup-generator)
