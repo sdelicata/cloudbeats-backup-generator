@@ -6,13 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync/atomic"
 
 	"github.com/rs/zerolog"
 
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/backup"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/config"
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/dropbox"
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/matcher"
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/tags"
@@ -49,15 +53,34 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	tok, err := resolveToken(ctx,
-		firstNonEmpty(*appKey, os.Getenv("DROPBOX_APP_KEY")),
-		firstNonEmpty(*appSecret, os.Getenv("DROPBOX_APP_SECRET")),
-		firstNonEmpty(*refreshToken, os.Getenv("DROPBOX_REFRESH_TOKEN")),
-		firstNonEmpty(*token, os.Getenv("DROPBOX_TOKEN")),
-		logger,
-	)
+	ak := firstNonEmpty(*appKey, os.Getenv("DROPBOX_APP_KEY"))
+	as := firstNonEmpty(*appSecret, os.Getenv("DROPBOX_APP_SECRET"))
+	rt := firstNonEmpty(*refreshToken, os.Getenv("DROPBOX_REFRESH_TOKEN"))
+	dt := firstNonEmpty(*token, os.Getenv("DROPBOX_TOKEN"))
+
+	tok, err := resolveToken(ctx, ak, as, rt, dt, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("resolving Dropbox token")
+		if !isInteractive() {
+			logger.Fatal().Err(err).Msg("resolving Dropbox token")
+		}
+
+		// Interactive auto-setup
+		logger.Warn().Msg("no Dropbox credentials found, starting interactive setup...")
+		if ak == "" {
+			ak = promptValue("Dropbox app key")
+		}
+		if as == "" {
+			as = promptValue("Dropbox app secret")
+		}
+		if err := runAuth(ctx, ak, as, logger); err != nil {
+			logger.Fatal().Err(err).Msg("authorization failed")
+		}
+
+		// Retry with saved credentials
+		tok, err = resolveToken(ctx, "", "", "", "", logger)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("resolving Dropbox token after setup")
+		}
 	}
 
 	// Auto-detect or validate workers
@@ -197,8 +220,70 @@ func main() {
 	logger.Info().Str("output", *output).Int("items", len(items)).Msg("backup file written")
 }
 
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && (fi.Mode()&os.ModeCharDevice) != 0
+}
+
+func promptValue(name string) string {
+	fmt.Fprintf(os.Stderr, "%s: ", name)
+	var value string
+	if _, err := fmt.Scanln(&value); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func runAuth(ctx context.Context, appKey, appSecret string, logger zerolog.Logger) error {
+	authURL := dropbox.AuthorizationURL(appKey)
+	fmt.Fprintf(os.Stderr, "Opening authorization URL in your browser...\n\n  %s\n\n", authURL)
+	openBrowser(authURL)
+
+	fmt.Fprint(os.Stderr, "Paste the authorization code here: ")
+	var code string
+	if _, err := fmt.Scanln(&code); err != nil {
+		return fmt.Errorf("reading authorization code: %w", err)
+	}
+	code = strings.TrimSpace(code)
+
+	if code == "" {
+		return fmt.Errorf("authorization code cannot be empty")
+	}
+
+	logger.Info().Msg("exchanging authorization code...")
+	refreshToken, _, err := dropbox.ExchangeAuthorizationCode(ctx, appKey, appSecret, code)
+	if err != nil {
+		return fmt.Errorf("exchanging authorization code: %w", err)
+	}
+
+	creds := &config.Credentials{
+		AppKey:       appKey,
+		AppSecret:    appSecret,
+		RefreshToken: refreshToken,
+	}
+	if err := config.Save(creds); err != nil {
+		return fmt.Errorf("saving credentials: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Credentials saved. You can now run the tool without any auth flags.\n")
+	return nil
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	default:
+		return
+	}
+	_ = cmd.Start()
+}
+
 func resolveToken(ctx context.Context, appKey, appSecret, refreshToken, directToken string, logger zerolog.Logger) (string, error) {
-	// Refresh mode: all 3 refresh params present
+	// Explicit flags: all 3 refresh params present
 	if appKey != "" && appSecret != "" && refreshToken != "" {
 		logger.Info().Msg("refreshing Dropbox access token...")
 		token, err := dropbox.RefreshAccessToken(ctx, appKey, appSecret, refreshToken)
@@ -209,14 +294,30 @@ func resolveToken(ctx context.Context, appKey, appSecret, refreshToken, directTo
 		return token, nil
 	}
 
+	// Stored credentials
+	creds, err := config.Load()
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to load stored credentials")
+	}
+	if creds != nil && creds.AppKey != "" && creds.AppSecret != "" && creds.RefreshToken != "" {
+		logger.Info().Msg("using stored credentials, refreshing access token...")
+		token, err := dropbox.RefreshAccessToken(ctx, creds.AppKey, creds.AppSecret, creds.RefreshToken)
+		if err != nil {
+			return "", fmt.Errorf("refreshing access token with stored credentials: %w", err)
+		}
+		logger.Info().Msg("access token refreshed successfully")
+		return token, nil
+	}
+
 	// Direct mode: token provided directly
 	if directToken != "" {
 		return directToken, nil
 	}
 
-	return "", fmt.Errorf("dropbox authentication required. Either provide:\n" +
-		"  - --app-key, --app-secret, and --refresh-token (recommended, automatic renewal)\n" +
-		"  - --token or DROPBOX_TOKEN env var (short-lived, expires in ~4h)")
+	return "", fmt.Errorf("dropbox authentication required. Either:\n" +
+		"  - Provide --app-key, --app-secret, and --refresh-token\n" +
+		"  - Provide --token or DROPBOX_TOKEN env var (short-lived, expires in ~4h)\n" +
+		"  - Run interactively to set up credentials (one-time setup)")
 }
 
 func firstNonEmpty(values ...string) string {

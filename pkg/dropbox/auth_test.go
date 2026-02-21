@@ -10,6 +10,89 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAuthorizationURL(t *testing.T) {
+	t.Parallel()
+
+	u := AuthorizationURL("my-app-key")
+	assert.Contains(t, u, "https://www.dropbox.com/oauth2/authorize")
+	assert.Contains(t, u, "client_id=my-app-key")
+	assert.Contains(t, u, "response_type=code")
+	assert.Contains(t, u, "token_access_type=offline")
+	assert.NotContains(t, u, "redirect_uri")
+}
+
+func TestExchangeAuthorizationCode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		statusCode       int
+		body             string
+		wantRefreshToken string
+		wantAccessToken  string
+		wantErr          string
+	}{
+		{
+			name:             "successful exchange",
+			statusCode:       http.StatusOK,
+			body:             `{"access_token":"sl.access","refresh_token":"rt.refresh","expires_in":14400,"token_type":"bearer","account_id":"dbid:123"}`,
+			wantRefreshToken: "rt.refresh",
+			wantAccessToken:  "sl.access",
+		},
+		{
+			name:       "invalid code",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":"invalid_grant"}`,
+			wantErr:    "code exchange failed (HTTP 400)",
+		},
+		{
+			name:       "empty refresh token",
+			statusCode: http.StatusOK,
+			body:       `{"access_token":"sl.access","refresh_token":"","expires_in":14400}`,
+			wantErr:    "empty refresh token in code exchange response",
+		},
+		{
+			name:       "empty access token",
+			statusCode: http.StatusOK,
+			body:       `{"access_token":"","refresh_token":"rt.refresh","expires_in":14400}`,
+			wantErr:    "empty access token in code exchange response",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodPost, r.Method)
+				assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
+
+				require.NoError(t, r.ParseForm())
+				assert.Equal(t, "authorization_code", r.FormValue("grant_type"))
+				assert.Equal(t, "test-code", r.FormValue("code"))
+				assert.Equal(t, "test-key", r.FormValue("client_id"))
+				assert.Equal(t, "test-secret", r.FormValue("client_secret"))
+
+				w.WriteHeader(test.statusCode)
+				_, _ = w.Write([]byte(test.body))
+			}))
+			defer srv.Close()
+
+			refreshToken, accessToken, err := exchangeAuthorizationCode(context.Background(), srv.URL, "test-key", "test-secret", "test-code")
+
+			if test.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, test.wantRefreshToken, refreshToken)
+			assert.Equal(t, test.wantAccessToken, accessToken)
+		})
+	}
+}
+
 func TestRefreshAccessToken(t *testing.T) {
 	t.Parallel()
 

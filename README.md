@@ -24,9 +24,9 @@ It reads audio metadata (artist, album, duration, etc.) directly from local file
 
 The tool supports two authentication methods:
 
-### Method 1: Refresh Token (Recommended)
+### Method 1: Interactive Setup (Recommended)
 
-Uses long-lived credentials to automatically obtain a fresh access token at each run. No manual token regeneration needed.
+Uses long-lived credentials to automatically obtain a fresh access token at each run. On first run, the tool detects missing credentials and launches an interactive OAuth2 setup: it prompts for your app key and secret, opens the authorization URL in your browser, exchanges the code, and stores credentials locally. Subsequent runs need zero auth flags.
 
 **App setup** (one-time):
 
@@ -40,39 +40,28 @@ Uses long-lived credentials to automatically obtain a fresh access token at each
 6. Click **Submit** to save the permissions
 7. Note your **App key** and **App secret** from the **Settings** tab
 
-**Generate a refresh token** (one-time):
+**First run** — the tool prompts for credentials automatically:
 
-1. Open this URL in your browser (replace `YOUR_APP_KEY`):
-   ```
-   https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&response_type=code&token_access_type=offline
-   ```
-2. Authorize the app and copy the **authorization code**
-3. Exchange the code for a refresh token:
-   ```sh
-   curl -X POST https://api.dropboxapi.com/oauth2/token \
-     -d code=AUTHORIZATION_CODE \
-     -d grant_type=authorization_code \
-     -d client_id=YOUR_APP_KEY \
-     -d client_secret=YOUR_APP_SECRET
-   ```
-4. Save the `refresh_token` from the JSON response — it does not expire
+```sh
+./cloudbeats-backup-generator --local ~/Dropbox/Music
+# → prompts for app key and app secret, opens browser for authorization
+```
 
-**Usage:**
+**Subsequent runs** (no auth flags needed):
+
+```sh
+./cloudbeats-backup-generator --local ~/Dropbox/Music
+```
+
+Credentials are stored in `~/Library/Application Support/cloudbeats-backup-generator/credentials.json` (macOS).
+
+You can also provide credentials explicitly via flags or environment variables for CI/scripting:
 
 ```sh
 ./cloudbeats-backup-generator --local ~/Dropbox/Music \
   --app-key YOUR_APP_KEY \
   --app-secret YOUR_APP_SECRET \
   --refresh-token YOUR_REFRESH_TOKEN
-```
-
-Or with environment variables:
-
-```sh
-export DROPBOX_APP_KEY="YOUR_APP_KEY"
-export DROPBOX_APP_SECRET="YOUR_APP_SECRET"
-export DROPBOX_REFRESH_TOKEN="YOUR_REFRESH_TOKEN"
-./cloudbeats-backup-generator --local ~/Dropbox/Music
 ```
 
 ### Method 2: Short-Lived Token
@@ -125,23 +114,29 @@ cloudbeats-backup-generator [flags]
 | `--dry-run` | `false` | Show Dropbox mapping without reading tags or writing a file |
 | `--log-level` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error` |
 
-**Token resolution priority:** If `--app-key`, `--app-secret`, and `--refresh-token` are all provided, a fresh access token is obtained automatically. Otherwise, `--token` / `DROPBOX_TOKEN` is used directly. Each flag falls back to its corresponding environment variable.
+**Token resolution priority:**
+1. Explicit flags (`--app-key` + `--app-secret` + `--refresh-token`)
+2. Stored credentials (if all fields present)
+3. Direct token (`--token` / `DROPBOX_TOKEN`)
+4. Interactive setup (prompts on first run if terminal is interactive)
+
+Each flag falls back to its corresponding environment variable.
 
 ### Examples
 
 ```sh
-# Using refresh token (recommended)
+# First run: prompts interactively for app key, app secret, and authorization
+./cloudbeats-backup-generator --local ~/Dropbox/Music
+
+# Subsequent runs: uses stored credentials automatically
+./cloudbeats-backup-generator --local ~/Dropbox/Music
+
+# Using explicit refresh token (for CI/scripting)
 ./cloudbeats-backup-generator --local ~/Dropbox/Music \
   --app-key "abc123" --app-secret "xyz789" --refresh-token "def456"
 
 # Using a short-lived access token
 ./cloudbeats-backup-generator --local ~/Dropbox/Music --token "sl.xxxxx"
-
-# Using environment variables
-export DROPBOX_APP_KEY="abc123"
-export DROPBOX_APP_SECRET="xyz789"
-export DROPBOX_REFRESH_TOKEN="def456"
-./cloudbeats-backup-generator --local ~/Dropbox/Music
 
 # Custom output path
 ./cloudbeats-backup-generator --local ~/Dropbox/Music --output ~/Desktop/backup.cbbackup
