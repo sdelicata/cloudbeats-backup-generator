@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 
 	"github.com/rs/zerolog"
 
@@ -22,7 +23,7 @@ func main() {
 	localDir := flag.String("local", "", "Path to the local folder to scan (required, must be inside the Dropbox folder)")
 	output := flag.String("output", "cloudbeats.cbbackup", "Path to the output .cbbackup file")
 	token := flag.String("token", "", "Dropbox access token (also read from DROPBOX_TOKEN env var)")
-	workers := flag.Int("workers", 200, "Number of parallel workers for reading tags")
+	workers := flag.Int("workers", 0, "Number of parallel workers for reading tags (0 = auto: 2x CPU cores)")
 	dryRun := flag.Bool("dry-run", false, "Show Dropbox mapping without reading tags or writing a file")
 	logLevel := flag.String("log-level", "info", "Log level: trace, debug, info, warn, error")
 	flag.Parse()
@@ -50,10 +51,9 @@ func main() {
 		logger.Fatal().Msg("Dropbox token is required. Use --token or set DROPBOX_TOKEN env var")
 	}
 
-	// Validate workers
-	if *workers < 1 {
-		logger.Warn().Int("value", *workers).Msg("--workers must be at least 1, clamping to 1")
-		*workers = 1
+	// Auto-detect or validate workers
+	if *workers <= 0 {
+		*workers = runtime.NumCPU() * 2
 	}
 
 	// Resolve local dir to absolute path

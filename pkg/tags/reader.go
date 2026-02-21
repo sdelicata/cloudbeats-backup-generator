@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"go.senan.xyz/taglib"
+	"github.com/sentriz/audiotags"
 )
 
 // AudioMeta holds extracted metadata from an audio file.
@@ -42,40 +42,42 @@ func ReadFile(path string) (meta AudioMeta, err error) {
 		}
 	}()
 
-	tags, tagsErr := taglib.ReadTags(path)
-	props, propsErr := taglib.ReadProperties(path)
-
-	if tagsErr != nil {
+	f, openErr := audiotags.Open(path)
+	if openErr != nil || f == nil {
 		return meta, nil
 	}
+	defer f.Close()
 
-	if v := firstTag(tags, "TITLE"); v != "" {
+	tags := f.ReadTags()
+	props := f.ReadAudioProperties()
+
+	if v := firstTag(tags, "title"); v != "" {
 		meta.Title = v
 	}
-	if v := firstTag(tags, "ARTIST"); v != "" {
+	if v := firstTag(tags, "artist"); v != "" {
 		meta.Artist = v
 	}
-	if v := firstTag(tags, "ALBUM"); v != "" {
+	if v := firstTag(tags, "album"); v != "" {
 		meta.Album = v
 	}
-	if v := firstTag(tags, "ALBUMARTIST"); v != "" {
+	if v := firstTag(tags, "albumartist"); v != "" {
 		meta.AlbumArtist = v
 	}
-	if v := firstTag(tags, "GENRE"); v != "" {
+	if v := firstTag(tags, "genre"); v != "" {
 		meta.Genre = v
 	}
-	if v := firstTag(tags, "DATE"); v != "" {
+	if v := firstTag(tags, "date"); v != "" {
 		meta.Year = parseYear(v)
 	}
-	if v := firstTag(tags, "TRACKNUMBER"); v != "" {
+	if v := firstTag(tags, "tracknumber"); v != "" {
 		meta.TrackNumber = parseSlashNumber(v, -1)
 	}
-	if v := firstTag(tags, "DISCNUMBER"); v != "" {
+	if v := firstTag(tags, "discnumber"); v != "" {
 		meta.DiskNumber = parseSlashNumber(v, 1)
 	}
 
-	if propsErr == nil {
-		meta.Duration = props.Length
+	if props != nil {
+		meta.Duration = time.Duration(props.LengthMs) * time.Millisecond
 	}
 
 	return meta, nil

@@ -13,6 +13,10 @@ It reads audio metadata (artist, album, duration, etc.) directly from local file
 ## Prerequisites
 
 - **Go 1.24+**
+- **TagLib** — native C++ audio metadata library
+  ```sh
+  brew install taglib   # macOS
+  ```
 - **Dropbox Desktop** installed and syncing the music folder locally
 - **A Dropbox access token** (see below)
 
@@ -64,7 +68,7 @@ cloudbeats-backup-generator [flags]
 | `--local` | *(required)* | Path to the local folder to scan (must be inside the Dropbox folder) |
 | `--output` | `cloudbeats.cbbackup` | Path to the output `.cbbackup` file |
 | `--token` | | Dropbox access token (also read from `DROPBOX_TOKEN` env var) |
-| `--workers` | `200` | Number of parallel workers for reading audio tags |
+| `--workers` | `0` (auto: 2x CPU cores) | Number of parallel workers for reading audio tags |
 | `--dry-run` | `false` | Show Dropbox mapping without reading tags or writing a file |
 | `--log-level` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error` |
 
