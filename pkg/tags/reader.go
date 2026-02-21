@@ -24,11 +24,8 @@ type AudioMeta struct {
 
 // ReadFile extracts audio metadata from the file at path.
 // On failure, returns defaults ("Unknown" for artist/album, filename for title, 0 for duration).
-func ReadFile(path string) AudioMeta {
-	tags, tagsErr := taglib.ReadTags(path)
-	props, propsErr := taglib.ReadProperties(path)
-
-	meta := AudioMeta{
+func ReadFile(path string) (meta AudioMeta) {
+	meta = AudioMeta{
 		Title:       filenameWithoutExt(path),
 		Artist:      "Unknown",
 		Album:       "Unknown",
@@ -36,6 +33,15 @@ func ReadFile(path string) AudioMeta {
 		TrackNumber: -1,
 		DiskNumber:  1,
 	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			// taglib panicked — return defaults
+		}
+	}()
+
+	tags, tagsErr := taglib.ReadTags(path)
+	props, propsErr := taglib.ReadProperties(path)
 
 	if tagsErr != nil {
 		return meta
