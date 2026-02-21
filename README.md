@@ -53,8 +53,6 @@ Uses long-lived credentials to automatically obtain a fresh access token at each
 ./cloudbeats-backup-generator --local ~/Dropbox/Music
 ```
 
-Credentials are stored in `~/Library/Application Support/cloudbeats-backup-generator/credentials.json` (macOS).
-
 You can also provide credentials explicitly via flags or environment variables for CI/scripting:
 
 ```sh
@@ -112,6 +110,7 @@ cloudbeats-backup-generator [flags]
 | `--token` | | Dropbox short-lived access token (also read from `DROPBOX_TOKEN` env var) |
 | `--workers` | `0` (auto: 2x CPU cores) | Number of parallel workers for reading audio tags |
 | `--dry-run` | `false` | Show Dropbox mapping without reading tags or writing a file |
+| `--no-cache` | `false` | Disable the tag cache (re-parse all files) |
 | `--log-level` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error` |
 
 **Token resolution priority:**
@@ -155,6 +154,15 @@ Each flag falls back to its corresponding environment variable.
 3. **Read tags** — Reads ID3/audio metadata (title, artist, album, duration, etc.) from each local file using a parallel worker pool
 4. **Build backup** — Assembles each matched file into a `.cbbackup` item with its Dropbox file ID and audio metadata
 5. **Write file** — Serializes to JSON and writes the `.cbbackup` file
+
+## Stored Files
+
+| File        | macOS                                                                        | Linux                                                    |
+|-------------|------------------------------------------------------------------------------|----------------------------------------------------------|
+| Credentials | `~/Library/Application Support/cloudbeats-backup-generator/credentials.json` | `~/.config/cloudbeats-backup-generator/credentials.json` |
+| Tag cache   | `~/Library/Caches/cloudbeats-backup-generator/cache.json`                    | `~/.cache/cloudbeats-backup-generator/cache.json`        |
+
+Credentials are saved automatically on first interactive run. The tag cache speeds up successive runs by remembering parsed audio metadata; use `--no-cache` to bypass it.
 
 ## Importing into CloudBeats
 

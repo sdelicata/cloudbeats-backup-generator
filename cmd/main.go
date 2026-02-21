@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/backup"
+	"github.com/sdelicata/cloudbeats-backup-generator/pkg/cache"
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/config"
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/dropbox"
 	"github.com/sdelicata/cloudbeats-backup-generator/pkg/matcher"
@@ -32,6 +33,7 @@ func main() {
 	refreshToken := flag.String("refresh-token", "", "Dropbox refresh token for automatic token renewal (also read from DROPBOX_REFRESH_TOKEN env var)")
 	workers := flag.Int("workers", 0, "Number of parallel workers for reading tags (0 = auto: 2x CPU cores)")
 	dryRun := flag.Bool("dry-run", false, "Show Dropbox mapping without reading tags or writing a file")
+	noCache := flag.Bool("no-cache", false, "Disable the tag cache (re-parse all files)")
 	logLevel := flag.String("log-level", "info", "Log level: trace, debug, info, warn, error")
 	flag.Parse()
 
@@ -160,12 +162,26 @@ func main() {
 		return
 	}
 
+	// Load tag cache
+	var tagCache *cache.TagCache
+	if !*noCache {
+		tagCache = cache.Load(defaultCachePath(), logger)
+		logger.Info().Int("entries", tagCache.Len()).Msg("tag cache loaded")
+	}
+
 	// Step 3: Read tags with worker pool
 	logger.Info().Int("workers", *workers).Msg("reading audio tags...")
 	total := len(result.Matched)
 
+	var cacheHits atomic.Int64
 	metas, errs := worker.Process(ctx, result.Matched, *workers,
 		func(_ context.Context, mf matcher.MatchedFile) (tags.AudioMeta, error) {
+			if tagCache != nil {
+				if meta, ok := tagCache.Lookup(mf.LocalPath); ok {
+					cacheHits.Add(1)
+					return meta, nil
+				}
+			}
 			return tags.ReadFile(mf.LocalPath)
 		},
 		func(done, total int) {
@@ -179,6 +195,22 @@ func main() {
 		if err != nil {
 			logger.Warn().Err(err).Str("file", result.Matched[i].LocalPath).Msg("error reading tags")
 		}
+	}
+
+	// Update and save tag cache
+	if tagCache != nil {
+		for i, mf := range result.Matched {
+			if errs[i] == nil {
+				tagCache.Store(mf.LocalPath, metas[i])
+			}
+		}
+		if err := tagCache.Save(); err != nil {
+			logger.Warn().Err(err).Msg("saving tag cache")
+		}
+		logger.Info().
+			Int("hits", int(cacheHits.Load())).
+			Int("parsed", total-int(cacheHits.Load())).
+			Msg("tag cache stats")
 	}
 
 	// Step 4: Build backup items
@@ -327,4 +359,12 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func defaultCachePath() string {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "cloudbeats-backup-generator", "cache.json")
 }
